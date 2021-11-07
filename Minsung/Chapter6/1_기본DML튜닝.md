@@ -123,7 +123,7 @@ Redo 로그 파일에 기록하기 전에 먼저 로그버퍼에 기록하는 �
 한 트랜잭션이 데이터를 변경하고 커밋하는 과정, 그리고 변경된 블록을 데이터파일에 기록하는 과정은 다음과 같습니다.
 
 1. DML 문을 실행하면 Redo 로그버퍼에 변경사항을 기록합니다.
-2. 버퍼블록에서 데이털르 변경합니다. 물론 버퍼캐시에서 블록을 찾지 못하면 데이터파일에서 읽는 작업부터 합니다.
+2. 버퍼블록에서 데이터를 변경합니다. 물론 버퍼캐시에서 블록을 찾지 못하면 데이터파일에서 읽는 작업부터 합니다.
 3. 커밋합니다.
 4. LGWR 프로세스가 Redo 로그버퍼 내용을 로그파일에 일괄 저장합니다.
 5. DBWR 프로세스가 변경된 버퍼블록들은 데이터파일에 일괄 저장합니다.
@@ -314,9 +314,76 @@ DEPT 테이블은 비 키-보존 테이블로 남습니다.
 
 <br>
 
+### 키 보존 테이블이란?
+
+키 보존 테이블이란 조인된 결과집합을 통해서도 중복 값 없이 Unique하게 식별이 가능한 테이블을 말합니다.
+
 
 
 
 
 ## 6.1.6 MERGE 문 활용
+
+DW에서 가장 흔히 발생하는 오퍼레이션은 기간계 시스템에서 가져온 신규 트랜잭션 데이터를 반영함으로써 두 시스템 간 데이터를 동기화하는 작업입니다.
+
+1. 전일 발생한 변경 데이터를 기간계 시스템으로부터 추출(Extraction)
+
+   ```
+   create table customer_delta
+   as
+   select * from customer
+   where mod_dt >= trunc(sysdate) - 1
+   and mod_dt < tunc(sysdate)
+   ```
+
+   
+
+2. CUSTOMER_DELTA 테이블을 DW 시스템으로 전송
+
+3. DW 시스템으로 적재
+
+   ```
+   merge into customer t using customer_delta s on (t.cust_id = s.cust_id)
+   when matched then update
+   	set t.cust_nm = s.cust_nm, t.email = s.email, ...
+   when not matched then insert
+   	(cust_id ...) values
+     (s.cust_id ...);
+   ```
+
+   
+
+MERGE 문은 Source(Customer_Delta) 테이블 기준으로 Target 테이블과 Left Outer 방식으로 조인해서 조인에 성공하면 UPDATE, 실패하면 INSERT 합니다.
+
+그래서 UPSERT라고 부릅니다.
+
+
+
+### Merge Into 활용 예
+
+저장하려는 레코드가 기본에 있던 것이면 UPDATE를 수행하고, 그렇지 않으면 INSERT 하려고 합니다.
+
+아래와 같이 처리하면 SQL을 항상 두 번씩 수행합니다.
+
+```
+select count(*) into :cnt from dept where deptno = :val1;
+
+if :cnt = 0 then
+	insert into dept(deptno, dname, loc) values(:val1, :val2, :val3);
+else
+	update dept set dname = :val2, loc = val3 where deptno =: val1;
+end if;
+```
+
+
+
+아래와 같이 하면 SQL을 최대 두 번 수행합니다.
+
+```
+update dept set dname = :val2, loc = :val3 where deptno = :val1;
+
+if sql%rowcount = 0 then
+	insert into dept(deptno, dname, loc) values(:val1, val2, val3);
+end if;
+```
 
