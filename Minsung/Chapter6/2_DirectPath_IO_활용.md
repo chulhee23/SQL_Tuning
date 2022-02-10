@@ -45,3 +45,9 @@
 
 
 
+## 6.2.2 Direct Path Insert
+
+일반적인 INSERT가 느린 이유는 다음과 같습니다.
+
+1. 데이터를 입력할 수 있는 블록을 FreeList에서 찾습니다. 테이블 HWM(High-Water-Mark) 아래쪽에 있는 블록 중 데이터 입력이 가능한 블록을 목록으로 관리하는 이를 FreeList라고 합니다.
+
